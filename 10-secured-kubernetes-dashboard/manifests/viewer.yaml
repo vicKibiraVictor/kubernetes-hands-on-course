@@ -1,0 +1,20 @@
+# A READ-ONLY user for the dashboard. The built-in "view" ClusterRole can look
+# but not touch. This is the safe way — never bind the dashboard to cluster-admin.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: viewer
+  namespace: kubernetes-dashboard
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: viewer-readonly
+roleRef:
+  kind: ClusterRole
+  name: view                 # a built-in, read-only role
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+  - kind: ServiceAccount
+    name: viewer
+    namespace: kubernetes-dashboard

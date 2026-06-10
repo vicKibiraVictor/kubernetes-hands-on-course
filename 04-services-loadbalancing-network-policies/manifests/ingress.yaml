@@ -1,0 +1,19 @@
+# Ingress = Layer-7 (HTTP) routing. Requests for host "web.local" go to web-clusterip.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+  namespace: ch4
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: web.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-clusterip
+                port:
+                  number: 80

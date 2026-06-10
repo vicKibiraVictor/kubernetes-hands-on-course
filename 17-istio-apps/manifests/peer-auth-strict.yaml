@@ -1,0 +1,10 @@
+# STRICT mTLS: every call between pods in 'bookinfo' must be mutually encrypted.
+# Anything without an Istio sidecar (i.e. not in the mesh) is refused.
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: bookinfo
+spec:
+  mtls:
+    mode: STRICT

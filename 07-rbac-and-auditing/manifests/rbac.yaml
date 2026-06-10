@@ -1,0 +1,31 @@
+# RBAC = Role-Based Access Control. Two halves:
+#   Role        — a list of allowed actions (verbs) on resources, in one namespace
+#   RoleBinding — gives that Role to a user/group/serviceaccount
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: dev
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]      # read-only — no create/delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jane-pod-reader
+  namespace: dev
+subjects:
+  - kind: User
+    name: jane                            # the user from Chapter 6
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io

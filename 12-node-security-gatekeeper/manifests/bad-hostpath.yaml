@@ -1,0 +1,16 @@
+# mounts the node's filesystem  ->  should be REJECTED
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-hostpath
+spec:
+  containers:
+    - name: c
+      image: nginx:alpine
+      volumeMounts:
+        - name: host
+          mountPath: /host
+  volumes:
+    - name: host
+      hostPath:
+        path: /

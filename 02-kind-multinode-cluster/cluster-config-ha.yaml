@@ -1,0 +1,19 @@
+# OPTIONAL: a highly-available cluster with 3 control-plane nodes.
+# When you give KinD more than one control-plane, it automatically starts an
+# HAProxy load-balancer container in front of them — that's the HAProxy the
+# book talks about. Try it with:
+#
+#   kind create cluster --config cluster-config-ha.yaml
+#   docker ps --filter "name=k8s-course-external-load-balancer"   # <- HAProxy
+#
+# Heads up: 5 nodes use more RAM. The rest of the course uses the lighter
+# default cluster (cluster-config.yaml), so only use this to explore HA.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: k8s-course
+nodes:
+  - role: control-plane
+  - role: control-plane
+  - role: control-plane
+  - role: worker
+  - role: worker

@@ -1,0 +1,16 @@
+# A runtime rule: pods labelled app=web may NOT run the Alpine package manager
+# (apk). Even if an attacker gets a shell, they can't install tools.
+apiVersion: security.kubearmor.com/v1
+kind: KubeArmorPolicy
+metadata:
+  name: block-package-manager
+  namespace: ch13
+spec:
+  selector:
+    matchLabels:
+      app: web
+  process:
+    matchPaths:
+      - path: /sbin/apk
+      - path: /usr/bin/apk
+  action: Block

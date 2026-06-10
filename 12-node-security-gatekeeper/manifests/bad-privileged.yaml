@@ -1,0 +1,11 @@
+# privileged: true  ->  should be REJECTED
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-privileged
+spec:
+  containers:
+    - name: c
+      image: nginx:alpine
+      securityContext:
+        privileged: true

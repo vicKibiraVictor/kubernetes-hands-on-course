@@ -1,0 +1,32 @@
+# Network Policies = a firewall for Pods.
+
+# 1) Deny ALL incoming traffic to every Pod in the namespace (a safe default).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ch4
+spec:
+  podSelector: {}            # {} means "all pods in this namespace"
+  policyTypes: [Ingress]
+---
+# 2) Then poke one hole: pods labelled role=client (and the ingress controller)
+#    may reach the web pods on port 80. Everything else stays blocked.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-client-to-web
+  namespace: ch4
+spec:
+  podSelector:
+    matchLabels: { app: web }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { role: client }
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 80

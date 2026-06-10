@@ -1,0 +1,10 @@
+# Settings for the kube-prometheus-stack chart.
+# We set a known Grafana password and wire Loki in as a second data source so
+# you can see BOTH metrics and logs in one Grafana.
+grafana:
+  adminPassword: admin
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc:3100

@@ -1,0 +1,13 @@
+# A sample audit policy (referenced by the README's optional auditing section).
+# It tells the API server WHAT to record and HOW MUCH detail.
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+  # Don't log noisy read-only requests to common resources.
+  - level: None
+    verbs: ["get", "list", "watch"]
+  # Log who created/changed/deleted things, with request + response bodies.
+  - level: RequestResponse
+    verbs: ["create", "update", "patch", "delete"]
+  # Everything else: log a one-line metadata record.
+  - level: Metadata

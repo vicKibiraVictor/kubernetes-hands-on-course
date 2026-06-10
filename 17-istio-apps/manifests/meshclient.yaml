@@ -1,0 +1,19 @@
+# A long-running client INSIDE the mesh (it gets a sidecar because the bookinfo
+# namespace has injection on). We exec into it to run the security tests.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meshclient
+  namespace: bookinfo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: meshclient }
+  template:
+    metadata:
+      labels: { app: meshclient }
+    spec:
+      containers:
+        - name: curl
+          image: curlimages/curl:latest
+          command: ["sleep", "infinity"]

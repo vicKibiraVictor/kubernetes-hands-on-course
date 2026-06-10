@@ -1,0 +1,5 @@
+# No 'owner' label -> Gatekeeper should REJECT this.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: no-owner

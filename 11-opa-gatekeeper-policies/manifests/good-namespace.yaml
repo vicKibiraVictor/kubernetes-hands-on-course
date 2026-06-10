@@ -1,0 +1,7 @@
+# Has the 'owner' label -> Gatekeeper should ALLOW this.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: has-owner
+  labels:
+    owner: team-a

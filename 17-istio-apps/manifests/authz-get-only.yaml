@@ -1,0 +1,16 @@
+# Authorization: the productpage service may only be called with HTTP GET.
+# Any other method (POST, DELETE, ...) is denied with 403 — even inside the mesh.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: productpage-get-only
+  namespace: bookinfo
+spec:
+  selector:
+    matchLabels:
+      app: productpage
+  action: ALLOW
+  rules:
+    - to:
+        - operation:
+            methods: ["GET"]
