@@ -32,7 +32,7 @@ It installs MetalLB, ingress-nginx, and the policy enforcer, deploys a sample ap
 then runs three tests:
 
 1. **LoadBalancer** — the `web-lb` service gets a real external IP.
-2. **Ingress** — `web.local` is routed to the app (reachable at `http://localhost`).
+2. **Ingress** — `web.local` is routed to the app (reached via a port-forward).
 3. **NetworkPolicy** — a Pod labelled `role=client` can reach the app; a Pod
    without the label is **blocked**.
 
@@ -40,14 +40,20 @@ then runs three tests:
 
 ```bash
 kubectl -n ch4 get svc                                   # see ClusterIP + LoadBalancer
-curl -H "Host: web.local" http://localhost               # reach it through the Ingress
+
+# reach it through the Ingress (works on every platform):
+kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8080:80 &
+curl -H "Host: web.local" http://localhost:8080
+
 kubectl -n ch4 get networkpolicy                         # the firewall rules
 ```
 
-> On **Linux** you can curl the LoadBalancer IP directly. On **Docker Desktop
-> (Mac/Windows)** that IP lives inside a VM, so use the Ingress (`localhost`) or
-> `kubectl port-forward` instead — the script tests the LB from *inside* the
-> cluster so it works everywhere.
+> **Why port-forward and not `localhost:80`?** kind only maps host port 80 to the
+> **control-plane** node, but the ingress controller often runs on a **worker** —
+> so `localhost:80` may hit a dead end. Port-forward always works.
+> On **Linux** you can also curl the LoadBalancer IP directly
+> (`curl http://<EXTERNAL-IP>`); on **Docker Desktop (Mac/Win)** that IP lives in
+> a VM, so use the port-forward.
 
 ## Clean up
 

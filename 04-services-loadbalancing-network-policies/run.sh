@@ -87,10 +87,15 @@ kubectl -n ch4 run lbtest --image=curlimages/curl:latest --restart=Never -i --rm
   curl -s -m 5 -o /dev/null -w "  http code: %{http_code}\n" "http://${LB}" 2>/dev/null || warn "LB test skipped"
 
 # ── prove: Ingress ────────────────────────────────────────────────────────
-step "TEST 2 — Ingress routes web.local -> the app (kind maps it to localhost)"
-sleep 3
-CODE="$(curl -s -m 5 -o /dev/null -w '%{http_code}' -H 'Host: web.local' http://localhost || echo '000')"
-info "curl -H 'Host: web.local' http://localhost  ->  ${CODE}  (200 = success)"
+# We reach the ingress controller via port-forward rather than the kind host-port
+# mapping: the controller may land on a worker node (the host port only maps to
+# the control-plane), and port-forward works the same on every platform.
+step "TEST 2 — Ingress routes web.local -> the app"
+kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 18080:80 >/dev/null 2>&1 &
+PF=$!; sleep 4
+CODE="$(curl -s -m 5 -o /dev/null -w '%{http_code}' -H 'Host: web.local' http://localhost:18080 || echo '000')"
+kill "$PF" 2>/dev/null || true
+info "ingress -> web.local  ->  ${CODE}  (200 = success)"
 
 # ── prove: NetworkPolicy ──────────────────────────────────────────────────
 step "TEST 3 — applying NetworkPolicies, then testing who can reach web"
@@ -104,5 +109,7 @@ info "pod labelled role=client  -> ${ALLOWED}   (expect 200)"
 info "pod with no label         -> ${BLOCKED}   (expect BLOCKED)"
 
 title "Done"
-info "Open the app in your browser:  curl -H 'Host: web.local' http://localhost"
+info "Reach the app through the ingress:"
+info "  kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8080:80"
+info "  curl -H 'Host: web.local' http://localhost:8080"
 info "Clean up:  ./cleanup.sh"
