@@ -33,13 +33,19 @@ helm repo update external-secrets >/dev/null
 helm upgrade --install external-secrets external-secrets/external-secrets \
   -n external-secrets --create-namespace --set installCRDs=true
 kubectl -n external-secrets rollout status deploy/external-secrets --timeout=180s
+# ESO also runs a validating webhook (with its own cert controller). The apply
+# below is rejected until the webhook is serving, so wait for all three.
+kubectl -n external-secrets rollout status deploy/external-secrets-webhook --timeout=180s
+kubectl -n external-secrets rollout status deploy/external-secrets-cert-controller --timeout=180s
 
 # ── Wire Vault -> ESO -> a Kubernetes Secret ──────────────────────────────
 step "connecting ESO to Vault and asking it to sync secret/demo"
 kubectl create namespace app --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n app create secret generic vault-token --from-literal=token=root \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -f manifests/external-secret.yaml
+# Even after the webhook pod is Ready its endpoints take a few seconds — retry.
+retry() { local n=0; until "$@"; do n=$((n+1)); [ "$n" -ge 6 ] && return 1; sleep 5; done; }
+retry kubectl apply -f manifests/external-secret.yaml
 
 step "waiting for ESO to create the Kubernetes Secret..."
 kubectl -n app wait --for=condition=Ready externalsecret/app-secret --timeout=120s || true
