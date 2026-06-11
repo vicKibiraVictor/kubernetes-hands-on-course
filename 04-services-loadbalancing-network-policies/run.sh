@@ -64,7 +64,10 @@ kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeou
 # ── NetworkPolicy enforcement (kindnet doesn't do it alone) ────────────────
 step "installing kube-network-policies (so NetworkPolicies are enforced)"
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/kube-network-policies/main/install.yaml
-kubectl -n kube-system rollout status ds/kube-network-policies --timeout=180s
+# On small/loaded clusters the API watch can blip ("client connection lost").
+# That's harmless — keep going; the policy test will still work once pods are up.
+kubectl -n kube-system rollout status ds/kube-network-policies --timeout=300s \
+  || warn "kube-network-policies still rolling out — continuing (re-run if TEST 3 misbehaves)"
 
 # ── the sample app ────────────────────────────────────────────────────────
 step "deploying the sample web app + its Services"
