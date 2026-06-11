@@ -23,7 +23,11 @@ kubectl apply -f "https://raw.githubusercontent.com/metallb/metallb/${MLB}/confi
 kubectl -n metallb-system rollout status deploy/controller --timeout=180s
 
 step "giving MetalLB an IP range from the kind network"
-SUBNET="$(docker network inspect kind -f '{{(index .IPAM.Config 0).Subnet}}')"   # e.g. 172.18.0.0/16
+# The kind network is often dual-stack (IPv4 + IPv6). Pick the IPv4 subnet — the
+# one that looks like a.b.c.d/n — not the IPv6 one (fc00:...).
+SUBNET="$(docker network inspect kind -f '{{range .IPAM.Config}}{{println .Subnet}}{{end}}' \
+  | grep -E '^[0-9]+(\.[0-9]+){3}/' | head -1)"
+[ -n "$SUBNET" ] || die "couldn't find an IPv4 subnet on the 'kind' docker network"
 PREFIX="$(echo "$SUBNET" | cut -d. -f1-2)"                                        # e.g. 172.18
 info "kind subnet ${SUBNET} -> pool ${PREFIX}.255.200-${PREFIX}.255.250"
 # Write to a file first: the apply may need a retry while MetalLB's webhook wakes
