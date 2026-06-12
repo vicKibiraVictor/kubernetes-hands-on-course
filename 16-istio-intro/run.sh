@@ -24,8 +24,8 @@ SUDO=""; [ -w /usr/local/bin ] || SUDO="sudo"
 $SUDO cp "${ISTIO_DIR}bin/istioctl" /usr/local/bin/ 2>/dev/null || true
 info "istioctl $(istioctl version --remote=false 2>/dev/null)"
 
-step "installing Istio (demo profile)"
-istioctl install --set profile=demo -y
+step "installing Istio (slim config — see slim-istio.yaml)"
+istioctl install -f slim-istio.yaml -y
 
 step "creating namespace 'bookinfo' with automatic sidecar injection"
 kubectl create namespace bookinfo --dry-run=client -o yaml | kubectl apply -f -
@@ -36,8 +36,10 @@ kubectl apply -n bookinfo -f "${ISTIO_DIR}samples/bookinfo/platform/kube/bookinf
 kubectl -n bookinfo wait --for=condition=Ready pods --all --timeout=300s || true
 info "notice each pod is 2/2 — your container + the Istio sidecar proxy"
 
-step "installing the observability add-ons (Kiali, Prometheus, ...)"
-kubectl apply -f "${ISTIO_DIR}samples/addons" || (sleep 5; kubectl apply -f "${ISTIO_DIR}samples/addons")
+step "installing just Kiali + Prometheus (skipping Grafana/Jaeger to save resources)"
+kubectl apply -f "${ISTIO_DIR}samples/addons/prometheus.yaml"
+kubectl apply -f "${ISTIO_DIR}samples/addons/kiali.yaml" \
+  || (sleep 5; kubectl apply -f "${ISTIO_DIR}samples/addons/kiali.yaml")
 kubectl -n istio-system rollout status deploy/kiali --timeout=180s
 
 title "Istio is running"

@@ -11,7 +11,8 @@ cd "$(dirname "$0")"
 need kubectl helm
 need_cluster
 title "Chapter 15 — Monitoring & Logging"
-warn "this chapter is resource-heavy — give Docker ~6GB RAM and close other chapters first."
+warn "trimmed for small clusters (see monitoring-values.yaml). Still the heaviest"
+warn "chapter — clean up earlier chapters first to free RAM."
 
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null
 helm repo add grafana https://grafana.github.io/helm-charts >/dev/null
@@ -37,5 +38,5 @@ info "     kubectl -n monitoring port-forward svc/kps-grafana 3000:80"
 info "2) browse http://localhost:3000   (login: admin / admin)"
 info "3) METRICS: open a dashboard (try 'Kubernetes / Compute Resources / Namespace (Pods)')"
 info "4) LOGS:    left menu -> Explore -> pick the 'Loki' data source -> query  {namespace=\"kube-system\"}"
-info "Alertmanager:  kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-alertmanager 9093:9093"
+info "(Alertmanager is disabled in the slim config — re-enable in monitoring-values.yaml if you want it.)"
 info "Clean up:  ./cleanup.sh"

@@ -1,10 +1,44 @@
-# Settings for the kube-prometheus-stack chart.
-# We set a known Grafana password and wire Loki in as a second data source so
-# you can see BOTH metrics and logs in one Grafana.
+# SLIM settings for a laptop / Codespace teaching cluster.
+# Goal: the stack actually fits and starts fast. Production would size these up.
+
+# Skip Alertmanager entirely — one less heavy component for a demo.
+alertmanager:
+  enabled: false
+
 grafana:
   adminPassword: admin
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+  # show Loki logs in the same Grafana
   additionalDataSources:
     - name: Loki
       type: loki
       access: proxy
       url: http://loki.monitoring.svc:3100
+
+prometheus:
+  prometheusSpec:
+    retention: 2h            # keep little history (default is 10d)
+    scrapeInterval: 60s      # scrape less often (default 30s)
+    # only a CPU/memory request, NO memory limit -> Prometheus won't get
+    # OOM-killed on a tight node.
+    resources:
+      requests: { cpu: 100m, memory: 200Mi }
+
+# kind doesn't expose these control-plane endpoints, so scraping them only
+# produces failing targets and noise. Turn them off.
+kubeControllerManager: { enabled: false }
+kubeScheduler:         { enabled: false }
+kubeEtcd:              { enabled: false }
+kubeProxy:             { enabled: false }
+
+# trim the helper components too
+prometheusOperator:
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+prometheus-node-exporter:
+  resources:
+    requests: { cpu: 10m, memory: 24Mi }
+kube-state-metrics:
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }

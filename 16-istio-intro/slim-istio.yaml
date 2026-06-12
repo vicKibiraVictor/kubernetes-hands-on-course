@@ -1,0 +1,36 @@
+# SLIM Istio for a teaching cluster.
+# vs the "demo" profile this: drops the egress gateway, pins everything to 1
+# replica (no autoscaling), and — the big win — shrinks every sidecar proxy.
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+spec:
+  profile: default              # default = istiod + ingress gateway (no egress)
+  components:
+    egressGateways:
+      - name: istio-egressgateway
+        enabled: false
+    pilot:
+      k8s:
+        resources:
+          requests: { cpu: 100m, memory: 128Mi }
+        hpaSpec:
+          minReplicas: 1
+          maxReplicas: 1
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        k8s:
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+          hpaSpec:
+            minReplicas: 1
+            maxReplicas: 1
+  values:
+    pilot:
+      autoscaleEnabled: false
+    global:
+      proxy:
+        # every injected pod gets one of these — keep it tiny
+        resources:
+          requests: { cpu: 10m, memory: 48Mi }
+          limits: { memory: 256Mi }
