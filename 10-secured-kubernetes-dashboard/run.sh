@@ -13,11 +13,20 @@ need kubectl helm
 need_cluster
 title "Chapter 10 — Secured Kubernetes Dashboard"
 
-step "installing the Kubernetes Dashboard (Helm OCI)"
+step "adding Kubernetes Dashboard Helm repo"
 
-# Install Dashboard using OCI registry (modern method)
+# Remove old/broken repo if present
+helm repo remove kubernetes-dashboard 2>/dev/null || true
+
+# Add the working retired repo
+helm repo add kubernetes-dashboard https://kubernetes-retired.github.io/dashboard
+
+step "updating Helm repos"
+helm repo update
+
+step "installing the Kubernetes Dashboard"
 helm upgrade --install kubernetes-dashboard \
-  oci://ghcr.io/kubernetes-dashboard/charts/kubernetes-dashboard \
+  kubernetes-dashboard/kubernetes-dashboard \
   -n kubernetes-dashboard \
   --create-namespace
 
@@ -36,7 +45,7 @@ TOKEN="$(kubectl -n kubernetes-dashboard create token viewer --duration=1h)"
 title "Dashboard ready"
 info "1) start the proxy (leave it running in this terminal):"
 info "     kubectl -n kubernetes-dashboard port-forward svc/kubernetes-dashboard-kong-proxy 8443:443"
-info "2) open:  https://localhost:8443   (accept the self-signed cert)"
+info "2) open: https://localhost:8443"
 info "3) choose 'Token' and paste:"
 echo
 echo "$TOKEN"
