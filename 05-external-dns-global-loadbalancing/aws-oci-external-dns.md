@@ -2,7 +2,7 @@
 
 A to Z in one place: buy a domain, create a cluster, host the DNS zone, connect the domain, install ExternalDNS, test it, and clean up.
 
-Pick **one track** (AWS or OCI). Sections 1 to 3 and 6 to 9 are shared.
+Pick **one track** (AWS or OCI). Registrar: Namecheap, GoDaddy, or Route 53 all covered in section 2. Sections 1 to 3 and 6 to 9 are shared.
 
 > **Verify before production.** Versions, flags and console menus change. This guide was written without running it against live accounts. Cross-check against the ExternalDNS tutorials for [AWS](https://kubernetes-sigs.github.io/external-dns/latest/tutorials/aws/) and [OCI](https://kubernetes-sigs.github.io/external-dns/latest/tutorials/oracle/), and pin the latest ExternalDNS image tag (examples use `v0.20.0`).
 
@@ -60,6 +60,7 @@ Flow for a new record:
 | Option | Notes |
 |---|---|
 | **Namecheap** (you already use it) | Good prices, free WHOIS privacy. Requires delegating DNS to AWS/OCI (section 2.4). |
+| **GoDaddy** | Large registrar. Works exactly like Namecheap for this guide (delegate DNS to AWS/OCI). Details in section 2.2b. |
 | **AWS Route 53 Registered Domains** | Easiest on AWS: it creates the hosted zone and sets the nameservers for you. No delegation step. |
 | **OCI** | OCI DNS hosts zones but, as far as I know, doesn't sell domains. Buy elsewhere and delegate. |
 | Cloudflare Registrar, GoDaddy, etc. | Work the same as Namecheap for this guide. |
@@ -75,6 +76,15 @@ Prices depend on the TLD (`.com`, `.dev`, `.co.ke`, ...) and change, so check at
 5. **Verify the registrant email.** ICANN requires you to click a verification link sent to your email. If you don't, the domain can be suspended.
 6. The domain appears under **Domain List**. Leave the default nameservers for now. You'll change them in section 2.4.
 
+### 2.2b Or buy at GoDaddy
+
+1. Go to godaddy.com, search for the name, and add it to the cart.
+2. Read the cart carefully. GoDaddy adds optional extras (domain privacy, email, website builder, "protection" plans). You only need the domain itself. WHOIS privacy is usually a paid add-on there, so decide whether you want it.
+3. **Check the renewal price**, not just the first-year price. Promotional first-year prices are often lower than renewals, and that varies by TLD.
+4. Choose auto-renew, check out, and pay.
+5. **Verify the registrant email** from ICANN (same requirement as everywhere), or the domain can be suspended.
+6. The domain appears under **My Products → Domains**. Leave GoDaddy's default nameservers for now and change them in section 2.4.
+
 ### 2.3 Or buy in Route 53 (AWS track only)
 
 1. AWS Console → **Route 53 → Registered domains → Register domains**.
@@ -83,7 +93,7 @@ Prices depend on the TLD (`.com`, `.dev`, `.co.ke`, ...) and change, so check at
 4. Route 53 creates a public hosted zone for the domain and sets its nameservers automatically. Registration can take from minutes to a day or so.
 5. Use this zone directly (skip delegation), with `--domain-filter=example.com`.
 
-### 2.4 Delegate DNS from Namecheap to AWS/OCI
+### 2.4 Delegate DNS from Namecheap (or GoDaddy) to AWS/OCI
 
 Do this **after** you create the zone in section 4.2 (AWS) or 5.2 (OCI), because you need its 4 nameservers.
 
@@ -106,6 +116,11 @@ Pick a layout:
 2. If **DNSSEC** is enabled at Namecheap, disable it first. A broken DNSSEC chain makes the domain fail to resolve.
 3. Namecheap → **Domain List → Manage → Nameservers** → **Custom DNS** → enter the 4 nameservers → save.
 
+**GoDaddy equivalents** (menu names may differ slightly, so verify in the UI)
+
+- *Whole domain:* My Products → Domains → click the domain → **DNS** → **Nameservers** → **Change Nameservers** → **I'll use my own nameservers** → enter the cloud's 4 nameservers → Save. Same prerequisites as above: copy existing records first, and disable DNSSEC if it's on.
+- *Subdomain:* open the domain's **DNS** page → **Add New Record** → Type **NS**, Name `k8s`, Value = each nameserver (4 records). As far as I know GoDaddy allows NS records on subdomains but not on the root (`@`). If it rejects them, use the whole-domain layout.
+
 **Check delegation**
 
 ```bash
@@ -120,6 +135,35 @@ You should see the cloud's nameservers. Propagation can take minutes to a few ho
 ### 2.5 Namecheap's API, and why this guide doesn't use it
 
 ExternalDNS has no built-in Namecheap provider. A community webhook provider may exist, but I couldn't confirm a maintained one. From memory (verify): the Namecheap API needs your caller's IP whitelisted, which is awkward with cluster egress IPs, and its record-update call replaces the whole record set, so a bug can wipe unrelated records. Delegating to Route 53 or OCI DNS avoids all of this.
+
+### 2.6 GoDaddy's API: ExternalDNS has a built-in provider, but delegation is still safer
+
+Unlike Namecheap, ExternalDNS ships a GoDaddy provider (`--provider=godaddy`). If your DNS stays at GoDaddy you can skip the Route 53/OCI zone and delegation entirely:
+
+```yaml
+args:
+  - --source=service
+  - --source=ingress
+  - --provider=godaddy
+  - --domain-filter=example.com
+  - --policy=upsert-only
+  - --registry=txt
+  - --txt-prefix=external-dns.
+  - --txt-owner-id=my-cluster
+  - --godaddy-api-key=<KEY>
+  - --godaddy-api-secret=<SECRET>
+```
+
+Create the key and secret at developer.godaddy.com (a **Production** key, not OTE/test). Put the credentials in a Kubernetes Secret and inject them as env vars rather than hard-coding them in args (ExternalDNS reads flags from `EXTERNAL_DNS_*` environment variables, e.g. `EXTERNAL_DNS_GODADDY_API_KEY`, but verify this against the current docs).
+
+Why I still recommend delegating to Route 53 or OCI DNS:
+
+- **API access may be restricted.** From memory, GoDaddy limited production DNS API access to accounts with a minimum number of domains or a qualifying plan. I couldn't confirm the current rule, so check that your account can create a production key before building on it.
+- **Long-lived static credentials** with access to the whole domain's DNS, instead of scoped IAM or workload identity.
+- **Records at a registrar** can't use cloud-native features such as Route 53 alias records, and the GoDaddy provider's behavior has gaps compared to the major cloud providers (for example, the docs describe a short default TTL when none is set, so set the TTL annotation).
+- ExternalDNS only touches records it owns, but a registrar account compromise would expose everything, not just the cluster's subdomain.
+
+The OCI/AWS tracks below work the same whichever registrar you used.
 
 ---
 
