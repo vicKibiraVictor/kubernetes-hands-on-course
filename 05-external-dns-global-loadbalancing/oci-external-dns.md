@@ -4,7 +4,7 @@ Dedicated OCI guide, written for this setup:
 
 - Home region: **US East (Ashburn)**, `us-ashburn-1`
 - Existing **Basic** OKE cluster (so no workload identity unless you upgrade to Enhanced)
-- Domain bought at a third-party registrar (Namecheap or GoDaddy), DNS hosted in **OCI DNS**
+- Domain registered at **GoDaddy**, DNS hosted in **OCI DNS**
 
 Goal: when you create a Kubernetes Service or Ingress with a hostname, ExternalDNS creates the DNS record in OCI DNS automatically.
 
@@ -20,7 +20,7 @@ Goal: when you create a Kubernetes Service or Ingress with a hostname, ExternalD
 4. [Install and configure the OCI CLI](#4-install-and-configure-the-oci-cli)
 5. [Connect to your OKE cluster](#5-connect-to-your-oke-cluster)
 6. [Create the DNS zone](#6-create-the-dns-zone)
-7. [Delegate the domain from your registrar](#7-delegate-the-domain-from-your-registrar)
+7. [Delegate the domain at GoDaddy](#7-delegate-the-domain-at-godaddy)
 8. [Give ExternalDNS permission (authentication)](#8-give-externaldns-permission-authentication)
 9. [Deploy ExternalDNS](#9-deploy-externaldns)
 10. [Test it](#10-test-it)
@@ -38,19 +38,19 @@ Three separate things:
 
 | Thing | Job | In your setup |
 |---|---|---|
-| Registrar | Sells the domain and stores which nameservers it uses | Namecheap or GoDaddy |
+| Registrar | Sells the domain and stores which nameservers it uses | GoDaddy |
 | DNS host | Stores the records (`A`, `CNAME`, `TXT`) | OCI DNS |
 | ExternalDNS | Runs in the cluster and writes records to the DNS host | Deployment in OKE |
 
-OCI hosts DNS zones but, as far as I know, doesn't sell domains. So you buy the domain elsewhere and **delegate** it to OCI DNS by pointing the registrar's nameservers (or a subdomain's NS records) at OCI.
+OCI hosts DNS zones but, as far as I know, doesn't sell domains. So you buy the domain elsewhere and **delegate** it to OCI DNS by pointing GoDaddy's nameservers at OCI.
 
 ```
-Registrar (Namecheap/GoDaddy)  ── NS records ──►  OCI DNS zone
+Registrar (GoDaddy)  ── nameservers ──►  OCI DNS zone
                                                       ▲
 Service/Ingress with hostname ──► ExternalDNS ────────┘ creates A + TXT records
         │
         ▼
-OCI Load Balancer (public IP)  ◄── users visit app.k8s.example.com
+OCI Load Balancer (public IP)  ◄── users visit app.zinglow.it.com
 ```
 
 Flow for each new hostname:
@@ -71,8 +71,8 @@ Fill these in once and keep them handy.
 | Cluster OCID | `ocid1.cluster.oc1.iad.aaaaaaaagjb67fkcmk6fvetuwi3b4aon4hnsut2ya4rzoi2dxcwqiwk2jaiq` |
 | Cluster type | Basic |
 | Compartment (cluster + zone) | `<compartment-name>` / `<compartment-ocid>` |
-| Domain | `example.com` (replace with yours) |
-| DNS zone you will create | `k8s.example.com` (subdomain layout) |
+| Domain | `zinglow.it.com` (an `it.com` name, see section 3.4) |
+| DNS zone you will create | `zinglow.it.com` (whole-domain layout, because nothing else uses the domain) |
 
 Variables for the shell:
 
@@ -80,7 +80,7 @@ Variables for the shell:
 export OCI_REGION=us-ashburn-1
 export CLUSTER_OCID=ocid1.cluster.oc1.iad.aaaaaaaagjb67fkcmk6fvetuwi3b4aon4hnsut2ya4rzoi2dxcwqiwk2jaiq
 export COMPARTMENT_OCID=<compartment-ocid>
-export ZONE=k8s.example.com
+export ZONE=zinglow.it.com
 ```
 
 Find a compartment OCID: Console → **Identity & Security → Compartments** → click it → copy the OCID. Keep the cluster, worker nodes and DNS zone in the **same** dedicated compartment (for example `dns-demo`) so one narrow policy covers it.
@@ -91,30 +91,24 @@ Find a compartment OCID: Console → **Identity & Security → Compartments** �
 
 If you already own one, skip to section 4.
 
-### 3.1 Namecheap
-
-1. Search for the name on namecheap.com and add it to the cart.
-2. Keep **WHOIS privacy** enabled (usually free). Choose auto-renew.
-3. Check out.
-4. **Verify the registrant email.** ICANN sends a verification link. If you ignore it, the domain can be suspended.
-5. The domain appears under **Domain List**. Leave the nameservers alone for now.
-
-### 3.2 GoDaddy
+### 3.1 GoDaddy
 
 1. Search on godaddy.com and add the domain to the cart.
 2. Decline extras you don't need (email, website builder, protection plans). WHOIS privacy is usually a paid add-on there.
 3. Check the **renewal price**, not just the first-year promo price.
-4. Choose auto-renew and check out. Verify the ICANN email.
-5. The domain appears under **My Products → Domains**. Leave nameservers alone for now.
+4. Choose auto-renew and check out. Complete any verification email GoDaddy sends.
+5. The domain appears under **My Products → Domains**. Leave the nameservers alone for now.
 
-Some TLDs have their own rules (for example, `.ke` domains go through Kenya's registry process), so check before buying one.
+### 3.2 About `.it.com`
 
-### 3.3 Why not use the registrar's API instead?
+`it.com` is a second-level domain run by CentralNic, so `zinglow.it.com` is a third-level name under it (not Italy's `.it`). Delegating DNS should work through GoDaddy's nameserver settings, but I couldn't find anything confirming how it behaves, so check with the `dig` commands in section 7. ICANN-style verification emails may not apply to this kind of domain, so just complete whatever verification email GoDaddy sent.
 
-- **Namecheap** has no built-in ExternalDNS provider. A community webhook may exist, but I couldn't confirm a maintained one. From memory (verify): its API needs your caller's IP whitelisted, and its record-update call replaces the whole record set, so a bug can wipe unrelated records.
-- **GoDaddy** does have a built-in ExternalDNS provider (`--provider=godaddy`). From memory, GoDaddy limited production DNS API access to accounts meeting certain requirements. I couldn't confirm the current rule. It also means long-lived static credentials with access to your whole domain.
+### 3.3 Why not use GoDaddy's API instead?
 
-Delegating to OCI DNS avoids both. That's the path in this guide.
+ExternalDNS has a built-in GoDaddy provider (`--provider=godaddy`), so you could keep DNS at GoDaddy and skip OCI DNS. This guide delegates to OCI DNS instead:
+
+- From memory, GoDaddy limited production DNS API access to accounts meeting certain requirements. I couldn't confirm the current rule, so you'd need to check that your account can create a production key.
+- It means long-lived static API credentials with access to your whole domain's DNS, instead of a narrowly scoped OCI policy.
 
 ---
 
@@ -157,7 +151,7 @@ Console: **Networking → DNS Management → Zones → Create Zone**
 
 - Method: **Manual**
 - Zone type: **Primary**
-- Zone name: `k8s.example.com`
+- Zone name: `zinglow.it.com`
 - Compartment: your dedicated compartment
 
 Or with the CLI:
@@ -172,43 +166,35 @@ Open the zone and copy its **4 nameservers**. They look like `ns1.p68.dns.oracle
 
 OCI DNS zones are **global**, so the region you are in doesn't affect them.
 
-### Subdomain vs whole domain
+### Layout: whole domain
 
-| Layout | Zone name | Pick when |
-|---|---|---|
-| **Subdomain (recommended)** | `k8s.example.com` | You have existing records (email, website) at the registrar. ExternalDNS can only touch `*.k8s.example.com`. |
-| Whole domain | `example.com` | The domain is only for this cluster, or you're moving all DNS to OCI. |
+Nothing else uses `zinglow.it.com`, so the zone is the whole domain and ExternalDNS manages names like `test.zinglow.it.com` and `app.zinglow.it.com`. If you later put email or a website on this domain, add those records (MX, TXT, etc.) to the same OCI zone.
 
-The rest of this guide uses the subdomain layout. For the whole-domain layout replace `k8s.example.com` with `example.com` everywhere.
+Alternative if you ever need to keep other DNS elsewhere: create a zone for a subdomain such as `k8s.zinglow.it.com`, add NS records for `k8s` in GoDaddy's DNS panel, and use `--domain-filter=k8s.zinglow.it.com`. As far as I know GoDaddy allows NS records on subdomains but not on the root, but I haven't verified that for this domain.
 
 ---
 
-## 7. Delegate the domain from your registrar
+## 7. Delegate the domain at GoDaddy
 
 Until delegation works, ExternalDNS can create records but nobody can resolve them.
 
-### Namecheap
+Menu names may differ slightly, so verify in the GoDaddy UI:
 
-**Subdomain:** Domain List → **Manage** → **Advanced DNS** → add 4 records: Type **NS Record**, Host `k8s`, Value = each OCI nameserver. If Namecheap rejects a trailing dot, omit it. If your account doesn't offer NS records for subdomains, use the whole-domain layout.
+1. My Products → Domains → click `zinglow.it.com`.
+2. Open its **DNS** page → **Nameservers** → **Change Nameservers**.
+3. Choose **I'll use my own nameservers** and enter the 4 OCI nameservers from your zone (`ns1.p68.dns.oraclecloud.net` style).
+4. Save.
 
-**Whole domain:** Domain List → **Manage** → **Nameservers** → **Custom DNS** → enter the 4 OCI nameservers → save.
+### Before switching nameservers
 
-### GoDaddy (menu names may differ slightly)
-
-**Subdomain:** open the domain's **DNS** page → **Add New Record** → Type **NS**, Name `k8s`, Value = each OCI nameserver (4 records). As far as I know GoDaddy allows NS records on subdomains but not on the root (`@`). If it rejects them, use the whole-domain layout.
-
-**Whole domain:** My Products → Domains → the domain → **DNS** → **Nameservers** → **Change Nameservers** → **I'll use my own nameservers** → enter the 4 OCI nameservers → Save.
-
-### Before switching the whole domain
-
-- **Copy every existing record** (A, CNAME, MX, TXT for SPF/DKIM/verification) into the OCI zone first, or email and other services break.
-- If **DNSSEC** is enabled at the registrar, disable it first. A broken DNSSEC chain makes the domain fail to resolve.
+- If GoDaddy added any default records you care about (parking page, email forwarding), note them first. Nothing else uses the domain, so there is nothing else to preserve.
+- If **DNSSEC** is enabled at GoDaddy, disable it first. A broken DNSSEC chain makes the domain fail to resolve.
 
 ### Check that delegation works
 
 ```bash
-dig NS k8s.example.com +short      # subdomain layout
-dig NS example.com +short          # whole-domain layout
+dig NS zinglow.it.com +short
+dig NS zinglow.it.com +trace      # shows where the chain breaks if it fails
 ```
 
 You should see the OCI nameservers. Propagation takes minutes to a few hours.
@@ -398,7 +384,7 @@ spec:
             - --provider=oci
             - --oci-zone-scope=GLOBAL
             - --oci-config-file=/etc/kubernetes/oci.yaml
-            - --domain-filter=k8s.example.com
+            - --domain-filter=zinglow.it.com
             - --policy=upsert-only
             - --registry=txt
             - --txt-owner-id=oke-demo
@@ -435,7 +421,7 @@ kind: Service
 metadata:
   name: nginx-test
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: test.k8s.example.com
+    external-dns.alpha.kubernetes.io/hostname: test.zinglow.it.com
     external-dns.alpha.kubernetes.io/ttl: "300"
     oci.oraclecloud.com/load-balancer-type: "lb"
     service.beta.kubernetes.io/oci-load-balancer-shape: "flexible"
@@ -474,21 +460,21 @@ kubectl get svc nginx-test -w                       # wait for EXTERNAL-IP
 kubectl logs deployment/external-dns -n external-dns --tail=30
 ```
 
-You want ExternalDNS log lines about creating records for `test.k8s.example.com`.
+You want ExternalDNS log lines about creating records for `test.zinglow.it.com`.
 
 Verify in three places, in this order:
 
 ```bash
 # 1. In OCI DNS itself
 oci dns record rrset get --zone-name-or-id $ZONE \
-  --domain test.k8s.example.com --compartment-id $COMPARTMENT_OCID --scope GLOBAL
+  --domain test.zinglow.it.com --compartment-id $COMPARTMENT_OCID --scope GLOBAL
 
-# 2. Straight from one of your zone's OCI nameservers (skips caches and the registrar)
-dig @<one-of-the-4-nameservers> test.k8s.example.com +short
+# 2. Straight from one of your zone's OCI nameservers (skips caches and GoDaddy)
+dig @<one-of-the-4-nameservers> test.zinglow.it.com +short
 
 # 3. Through normal public DNS
-dig test.k8s.example.com +short
-curl -I http://test.k8s.example.com
+dig test.zinglow.it.com +short
+curl -I http://test.zinglow.it.com
 ```
 
 You should see an `A` record and a `TXT` ownership record. If step 2 works but step 3 doesn't, delegation (section 7) isn't finished or hasn't propagated.
@@ -507,7 +493,7 @@ metadata:
 spec:
   ingressClassName: <your-ingress-class>
   rules:
-    - host: app.k8s.example.com        # ExternalDNS creates this record
+    - host: app.zinglow.it.com        # ExternalDNS creates this record
       http:
         paths:
           - path: /
@@ -537,7 +523,7 @@ helm install cert-manager jetstack/cert-manager \
 
 | Flag | Why |
 |---|---|
-| `--domain-filter=k8s.example.com` | ExternalDNS can only manage this zone. Always set it. |
+| `--domain-filter=zinglow.it.com` | ExternalDNS can only manage this zone. Always set it. |
 | `--policy=upsert-only` | Creates and updates, never deletes. Switch to `sync` once you trust it. |
 | `--registry=txt` + `--txt-owner-id=<id>` | Ownership marker. Use a **fixed, unique** ID per cluster. A random ID per restart would orphan your own records. |
 | `--oci-zone-scope=GLOBAL` | Public zones. Use `PRIVATE` for VCN-only zones. |
@@ -550,7 +536,7 @@ helm install cert-manager jetstack/cert-manager \
 - **TXT ownership records:** ExternalDNS only modifies or deletes records carrying its own owner ID. It won't take over a record you created by hand. Delete it and let ExternalDNS recreate it.
 - **One replica only:** there is no leader election by default, so several replicas would race each other.
 - **TTL:** set per record with `external-dns.alpha.kubernetes.io/ttl`. Keep it low during migrations.
-- **Multiple hostnames:** `external-dns.alpha.kubernetes.io/hostname: a.k8s.example.com,b.k8s.example.com`.
+- **Multiple hostnames:** `external-dns.alpha.kubernetes.io/hostname: a.zinglow.it.com,b.zinglow.it.com`.
 
 ### Checklist
 
@@ -570,8 +556,8 @@ helm install cert-manager jetstack/cert-manager \
 
 | Symptom | Likely cause and fix |
 |---|---|
-| Records in OCI but don't resolve publicly | Registrar delegation missing or not propagated. Run `dig NS k8s.example.com`. |
-| Whole domain stopped resolving after switching nameservers | DNSSEC still enabled at the registrar, or records weren't copied to the OCI zone |
+| Records in OCI but don't resolve publicly | Delegation at GoDaddy missing or not propagated. Run `dig NS zinglow.it.com`. |
+| Whole domain stopped resolving after switching nameservers | DNSSEC still enabled at GoDaddy, or records weren't copied to the OCI zone |
 | Email broke after switching nameservers | MX/TXT records weren't copied to the OCI zone |
 | `NotAuthorizedOrNotFound` in logs | Policy missing, wrong compartment in the policy or in `oci.yaml`, or (instance principal) the dynamic group rule doesn't match your worker nodes' compartment. OCI returns this one error for both "not allowed" and "doesn't exist". |
 | No zones found | Zone is in a different compartment than `oci.yaml` says, or scope mismatch (GLOBAL vs PRIVATE) |
@@ -588,7 +574,7 @@ Useful commands:
 kubectl logs -f deployment/external-dns -n external-dns
 kubectl describe svc nginx-test
 kubectl auth can-i list services --as=system:serviceaccount:external-dns:external-dns
-dig @<oci-nameserver> test.k8s.example.com
+dig @<oci-nameserver> test.zinglow.it.com
 ```
 
 Tip: run once with `--dry-run --log-level=debug` to see what ExternalDNS would change.
@@ -617,7 +603,7 @@ kubectl delete -f external-dns-rbac.yaml
 
 4. Delete the DNS zone (Console → the zone → **Delete**), then the IAM pieces you created: the policy, the dynamic group `oke-nodes`, and for the API-key route the user, group, and key.
 5. If you're finished with the cluster: Console → the OKE cluster → **Delete** (also remove the node pool, and the VCN if Quick create made one for it).
-6. At the registrar, remove the `k8s` NS records (or restore the original nameservers).
+6. At GoDaddy, restore the original nameservers (or leave them pointing at OCI if you'll keep using OCI DNS).
 7. The domain itself renews each year if auto-renew is on.
 
 Check billing the next day to make sure nothing is still running.
@@ -629,10 +615,10 @@ Check billing the next day to make sure nothing is still running.
 **Order of operations**
 
 ```
- 1. Buy domain (Namecheap/GoDaddy) ................ verify ICANN email
+ 1. Buy domain at GoDaddy ........................ complete any verification email
  2. oci setup config; kubeconfig for the Ashburn cluster
- 3. Create OCI DNS zone (k8s.example.com) ......... copy the 4 nameservers
- 4. Delegate at registrar (NS records) ............ dig NS to confirm
+ 3. Create OCI DNS zone (zinglow.it.com) ......... copy the 4 nameservers
+ 4. Set OCI nameservers at GoDaddy ............... dig NS to confirm
  5. Dynamic group + DNS policy (instance principal)
  6. kubectl apply RBAC; create Secret from oci.yaml
  7. Deploy ExternalDNS (upsert-only, domain-filter, txt-owner-id)
